@@ -11,6 +11,7 @@
 #include <random>
 #include <fstream>
 #include <utility>
+#include <cmath>
 
 using namespace std;
 
@@ -22,9 +23,8 @@ public:
     Ising(string, string);
     vector<vector<pair<int,double>>> getNeighbors() { return neighbors; };
     
-    void flipSpin(int spin_flip) {
-        all_spins[spin_flip-1] *= -1;
-    }
+    int getNumSpins() { return (int)all_spins.size(); }
+    void flipSpin(int spin_flip) { all_spins[spin_flip-1] *= -1; }
     
     double getE() {
         double E=0.0;
@@ -37,7 +37,6 @@ public:
                     double J = neighbors[i][j].second;
                     int spin_neighbor = all_spins[neighbor-1];
                     //cout << "Node " << node << "\t neighbor=" << neighbor << "\t J x spin x spin_neighbor = " << J*spin * spin_neighbor << endl;
-                
                     E += J*spin * spin_neighbor;
                 }
             }
@@ -46,6 +45,7 @@ public:
         }
         return E;
     }
+    
     double deltaE(int spin_flip) {
         double deltaE = 0.0;
         
@@ -59,7 +59,6 @@ public:
             if (spin_flip < neighbor) {
                 double J = neighbors[idx][i].second;
                 int spin_neighbor = all_spins[neighbor-1];
-                
                 deltaE += 2*J * all_spins[idx] * spin_neighbor;
             }
         }
@@ -71,7 +70,6 @@ public:
 //        double E_fin = getE();
 //        flipSpin(spin_flip);
 //        deltaE = E_fin - E_beg;
-        
 
         return deltaE;
     }
@@ -113,10 +111,51 @@ Ising::Ising(string spinFile, string bondsFile) {
     }
 }
 
+void WriteGrid(int size, mt19937 &m, string spinFile, string bondFile) {
+    ofstream sp_file, b_file;
+    sp_file.open(spinFile, fstream::trunc);
+    b_file.open(bondFile, fstream::trunc);
+
+    uniform_int_distribution<int> int_dist(0,1);
+    uniform_real_distribution<double> r_dist(-2.0,2.0);
+    
+    for (int i=0; i < size*size; i++) {
+        int node = i+1;
+        double h = 1.0, J = 1.0;
+        int rand = int_dist(m);
+        int spin = rand==0 ? -1 : 1;
+        //h = r_dist(m);
+        sp_file << node << " " << spin << " " << h << endl;
+        //J = r_dist(m);
+        if (node < size*size) {
+            if (node % size != 0) {
+                b_file << node << " " << node+1 << " " << J << endl;
+                //J = r_dist(m);
+            }
+            if (node < size*size+1 - size) {
+                b_file << node << " " << node+size << " " << J << endl;
+                //J = r_dist(m);
+            }
+        }
+    }
+    sp_file.close();
+    b_file.close();
+}
+
 int main(int argc, char** argv) {
-    Ising myState ("spin.txt","bonds.txt");
+    // Random device
+    random_device rd;
+    mt19937 mt(rd());
+    
+    string gridSpin="grid_spin.txt", gridBond="grid_bond.txt";
+    WriteGrid(3,mt,gridSpin,gridBond);
+    
+    //string spin_file="spin.txt", bond_file="bonds.txt";
+    string spin_file=gridSpin, bond_file=gridBond;
+    
+    Ising myState (spin_file,bond_file);
     myState.printNeighbors();
-    cout << myState.getE() << endl;
-    cout << myState.deltaE(5) << endl;
+    cout << "E = " << myState.getE() << endl;
+    
     return 0;
 }
