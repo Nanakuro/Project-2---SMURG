@@ -12,6 +12,8 @@
 #include <fstream>
 #include <utility>
 #include <cmath>
+#include <sys/stat.h>
+#include <unistd.h>
 
 using namespace std;
 
@@ -74,6 +76,13 @@ public:
         return deltaE;
     }
     
+    string getBinary() {
+        string bin = "";
+        for (const auto &s : all_spins) {
+            bin += s==1 ? "1" : "0";
+        }
+        return bin;
+    }
     
     void printNeighbors(){
         for (int i=0; i < neighbors.size(); i++) {
@@ -111,44 +120,75 @@ Ising::Ising(string spinFile, string bondsFile) {
     }
 }
 
-void WriteGrid(int size, mt19937 &m, string spinFile, string bondFile) {
-    ofstream sp_file, b_file;
-    sp_file.open(spinFile, fstream::trunc);
-    b_file.open(bondFile, fstream::trunc);
+void WriteGrid(int size,
+               mt19937 &m,
+               string spinFile, string bondFile,
+               bool file_exists=false) {
 
-    uniform_int_distribution<int> int_dist(0,1);
-    uniform_real_distribution<double> r_dist(-2.0,2.0);
+    if (file_exists) {
+        ofstream sp_file, b_file;
+        sp_file.open(spinFile, fstream::trunc);
+        b_file.open(bondFile, fstream::trunc);
+
+        uniform_int_distribution<int> int_dist(0,1);
+        uniform_real_distribution<double> r_dist(-2.0,2.0);
     
-    for (int i=0; i < size*size; i++) {
-        int node = i+1;
-        double h = 1.0, J = 1.0;
-        int rand = int_dist(m);
-        int spin = rand==0 ? -1 : 1;
-        //h = r_dist(m);
-        sp_file << node << " " << spin << " " << h << endl;
-        //J = r_dist(m);
-        if (node < size*size) {
-            if (node % size != 0) {
-                b_file << node << " " << node+1 << " " << J << endl;
-                //J = r_dist(m);
+        for (int i=0; i < size*size; i++) {
+            int node = i+1;
+            double h = 0.0, J = 1.0;
+            int spin = 1;
+            //int rand = int_dist(m);
+            //int spin = rand==0 ? -1 : 1;
+            //h = r_dist(m);
+            sp_file << node << " " << spin << " " << h << endl;
+            //J = r_dist(m);
+            int left = node - 1,
+                right = node + 1,
+                up = node - size,
+                down = node + size;
+            
+            left % size == 0 && (left += size);
+            right % size == 1 && (right -= size);
+            up < 1 && (up += size*size);
+            down > size*size && (down -= size*size);
+
+            if (left+1-size == node) {
+                b_file << node << " " << left << " " << J << endl;// J = r_dist(m);
             }
-            if (node < size*size+1 - size) {
-                b_file << node << " " << node+size << " " << J << endl;
-                //J = r_dist(m);
+            if (right > node) {
+                b_file << node << " " << right << " " << J << endl;// J = r_dist(m);
+            }
+            if (down > node) {
+                b_file << node << " " << down << " " << J << endl;// J = r_dist(m);
+            }
+            if (up+size-size*size == node) {
+                b_file << node << " " << up << " " << J << endl;// J = r_dist(m);
             }
         }
+        sp_file.close();
+        b_file.close();
     }
-    sp_file.close();
-    b_file.close();
+}
+
+inline bool fileExists (const string& name) {
+    struct stat buffer;
+    return (stat (name.c_str(), &buffer) == 0);
+}
+
+double calc_alpha(double delta_E, double beta) {
+    double alph = exp(-delta_E*beta);
+    return alph;
 }
 
 int main(int argc, char** argv) {
     // Random device
     random_device rd;
     mt19937 mt(rd());
+    uniform_real_distribution<double> real_dist(0,1);
     
     string gridSpin="grid_spin.txt", gridBond="grid_bond.txt";
-    WriteGrid(3,mt,gridSpin,gridBond);
+    //bool not_file = (!fileExists(gridSpin) && !fileExists(gridBond));
+    WriteGrid(3, mt, gridSpin, gridBond,true);//, not_file);
     
     //string spin_file="spin.txt", bond_file="bonds.txt";
     string spin_file=gridSpin, bond_file=gridBond;
@@ -156,6 +196,29 @@ int main(int argc, char** argv) {
     Ising myState (spin_file,bond_file);
     myState.printNeighbors();
     cout << "E = " << myState.getE() << endl;
+    uniform_int_distribution<int> random_node(1,myState.getNumSpins());
+    int num_sweeps = 10000, start_time = num_sweeps/4;
+    int sweep = 10000;
+    double beta = 1/2.0;
+
+
+    ofstream E_file;
+    string E_file_name="grid_config.txt";
+    E_file.open(E_file_name, fstream::trunc);
+    for (int i=0; i<num_sweeps; i++) {
+        for (int j=0; j<sweep; j++) {
+            int node_flip = random_node(mt);
+            double alpha = calc_alpha(myState.deltaE(node_flip), beta);
+            double rand_var = real_dist(mt);
+            if (rand_var < alpha) {
+                myState.flipSpin(node_flip);
+            }
+        }
+        if (i+1 >= start_time) {//} && (i+1) % 10 == 0) {
+            E_file << myState.getBinary() << endl;
+        }
+    }
+    E_file.close();
     
     return 0;
 }
