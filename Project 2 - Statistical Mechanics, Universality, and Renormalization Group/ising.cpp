@@ -15,31 +15,40 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+
 using namespace std;
 
 class Ising {
     vector<vector<pair<int,double>>> neighbors;
+    vector<int> original_spins;
+    double Z;
 public:
     vector<int> all_spins;
     vector<double> magfield;
-    Ising(string, string);
+    double beta;
+    Ising(string, string, double);
     vector<vector<pair<int,double>>> getNeighbors() { return neighbors; };
     
-    int getNumSpins() { return (int)all_spins.size(); }
-    void flipSpin(int spin_flip) { all_spins[spin_flip-1] *= -1; }
+    int getNumSpins() {
+        return (int)all_spins.size();
+    }
+    
+    void flipSpin(int spin_flip) {
+        all_spins[spin_flip-1] *= -1;
+    }
     
     double getE() {
         double E=0.0;
-        for (int i=0; i < neighbors.size(); i++) {
+        for (int i=0; i < neighbors.size(); ++i) {
             int node = i+1, spin = all_spins[i];
             double h = magfield[i];
-            for (int j=0; j < neighbors[i].size(); j++) {
+            for (int j=0; j < neighbors[i].size(); ++j) {
                 int neighbor = neighbors[i][j].first;
                 if (node < neighbor) {
                     double J = neighbors[i][j].second;
                     int spin_neighbor = all_spins[neighbor-1];
                     //cout << "Node " << node << "\t neighbor=" << neighbor << "\t J x spin x spin_neighbor = " << J*spin * spin_neighbor << endl;
-                    E += J*spin * spin_neighbor;
+                    E += -J * spin * spin_neighbor;
                 }
             }
             //cout << "Node " << node << "\t spin x h = " << h*spin << endl;
@@ -52,28 +61,60 @@ public:
         double deltaE = 0.0;
         
         // Complicated code
-        flipSpin(spin_flip);
+        //flipSpin(spin_flip);
         int idx = spin_flip-1;
-        deltaE += 2*all_spins[idx] * magfield[idx];
+        deltaE += -2*all_spins[idx] * magfield[idx];
 
-        for (int i=0; i < neighbors[idx].size(); i++) {
+        for (int i=0; i < neighbors[idx].size(); ++i) {
             int neighbor = neighbors[idx][i].first;
-            if (spin_flip < neighbor) {
-                double J = neighbors[idx][i].second;
-                int spin_neighbor = all_spins[neighbor-1];
-                deltaE += 2*J * all_spins[idx] * spin_neighbor;
-            }
+            double J = neighbors[idx][i].second;
+            int spin_neighbor = all_spins[neighbor-1];
+            deltaE += 2*J * all_spins[idx] * spin_neighbor;
         }
-        flipSpin(spin_flip);
         
         // Simple code
 //        double E_beg = getE();
 //        flipSpin(spin_flip);
 //        double E_fin = getE();
-//        flipSpin(spin_flip);
 //        deltaE = E_fin - E_beg;
-
+        
+        //flipSpin(spin_flip);
         return deltaE;
+    }
+    
+    void setZ(double b) {
+        beta = b;
+        const vector<int> temp_spins = all_spins;
+        const int bit_length = (int)all_spins.size();
+        string binary = string(bit_length,'0');
+        Z = 0.0;
+        int decimal = stoi(binary, nullptr, 2);
+        while (decimal < (int) pow(2.0,bit_length)) {
+            binary = intToBin(decimal);
+            binary = string(bit_length - binary.length(),'0') + binary;
+            binToSpins(binary);
+            Z += exp(-beta*getE());
+            ++decimal;
+        };
+        all_spins = temp_spins;
+    }
+    
+    double getZ() {
+        return Z;
+    }
+    
+    double getAlpha(int spin_flip) {
+        return exp(-beta*deltaE(spin_flip));
+    }
+    
+    double getProb() {
+        return exp(-beta*getE())/Z;
+    }
+    
+    void binToSpins(string binary) {
+        for (string::size_type i=0; i<binary.size(); ++i) {
+            all_spins[i] = binary[i]=='1' ? 1 : -1;
+        }
     }
     
     string getBinary() {
@@ -84,10 +125,23 @@ public:
         return bin;
     }
     
+    static string intToBin(unsigned int n) {
+        string str = "";
+        if (n / 2 != 0) {
+            str += intToBin(n / 2);
+        }
+        str += to_string(n % 2);
+        return str;
+    }
+    
+    void reset() {
+        all_spins = original_spins;
+    }
+    
     void printNeighbors(){
-        for (int i=0; i < neighbors.size(); i++) {
+        for (int i=0; i < neighbors.size(); ++i) {
             cout << "Node " << i+1 << ":";
-            for (int j=0; j < neighbors[i].size(); j++) {
+            for (int j=0; j < neighbors[i].size(); ++j) {
                 pair<int,double> neighbor_pair = neighbors[i][j];
                 cout << " (" << neighbor_pair.first << ", " << neighbor_pair.second << ")";
             }
@@ -96,7 +150,7 @@ public:
     }
 };
 
-Ising::Ising(string spinFile, string bondsFile) {
+Ising::Ising(string spinFile, string bondsFile, double b) {
     ifstream spin_inp(spinFile);
     ifstream bonds_inp(bondsFile);
     int node, sp, neighbor;
@@ -107,6 +161,7 @@ Ising::Ising(string spinFile, string bondsFile) {
         magfield.push_back(h);
         line++;
     }
+    original_spins = all_spins;
     neighbors.resize(line);
     while (bonds_inp >> node >> neighbor >> J) {
         if (node >= 1) {
@@ -118,6 +173,7 @@ Ising::Ising(string spinFile, string bondsFile) {
             neighbors[neighbor-1].push_back(neighbor_pair);
         }
     }
+    setZ(b);
 }
 
 void WriteGrid(int size,
@@ -133,7 +189,7 @@ void WriteGrid(int size,
         uniform_int_distribution<int> int_dist(0,1);
         uniform_real_distribution<double> r_dist(-2.0,2.0);
     
-        for (int i=0; i < size*size; i++) {
+        for (int i=0; i < size*size; ++i) {
             int node = i+1;
             double h = 0.0, J = 1.0;
             int spin = 1;
@@ -175,9 +231,9 @@ inline bool fileExists (const string& name) {
     return (stat (name.c_str(), &buffer) == 0);
 }
 
-double calc_alpha(double delta_E, double beta) {
-    double alph = exp(-delta_E*beta);
-    return alph;
+string zfill(unsigned int z, string &s) {
+    s = string(z - s.length(),'0') + s;
+    return s;
 }
 
 int main(int argc, char** argv) {
@@ -186,39 +242,53 @@ int main(int argc, char** argv) {
     mt19937 mt(rd());
     uniform_real_distribution<double> real_dist(0,1);
     
+    int num_sweeps = 10000, start_time = 10;
+    int sweep = 10000;
+    double beta = 0.3;
+
     string gridSpin="grid_spin.txt", gridBond="grid_bond.txt";
     //bool not_file = (!fileExists(gridSpin) && !fileExists(gridBond));
-    WriteGrid(3, mt, gridSpin, gridBond,true);//, not_file);
-    
+    int grid_size = 3;
+    WriteGrid(grid_size, mt, gridSpin, gridBond,true);//, not_file);
+
     //string spin_file="spin.txt", bond_file="bonds.txt";
     string spin_file=gridSpin, bond_file=gridBond;
-    
-    Ising myState (spin_file,bond_file);
+    Ising myState (spin_file, bond_file, beta);
     myState.printNeighbors();
     cout << "E = " << myState.getE() << endl;
     uniform_int_distribution<int> random_node(1,myState.getNumSpins());
-    int num_sweeps = 10000, start_time = num_sweeps/4;
-    int sweep = 10000;
-    double beta = 1/2.0;
 
+    ofstream C_file, E_file;
+    string C_file_name="grid_config.txt", E_file_name="grid_energy.txt";
 
-    ofstream E_file;
-    string E_file_name="grid_config.txt";
-    E_file.open(E_file_name, fstream::trunc);
-    for (int i=0; i<num_sweeps; i++) {
-        for (int j=0; j<sweep; j++) {
+    // MARKOV CHAIN MONTE CARLO:
+    C_file.open(C_file_name, fstream::trunc);
+    for (int n_swp=0; n_swp<num_sweeps; ++n_swp) {
+        for (int swp=0; swp<sweep; ++swp) {
             int node_flip = random_node(mt);
-            double alpha = calc_alpha(myState.deltaE(node_flip), beta);
+            double alpha = myState.getAlpha(node_flip);
             double rand_var = real_dist(mt);
             if (rand_var < alpha) {
                 myState.flipSpin(node_flip);
             }
         }
-        if (i+1 >= start_time) {//} && (i+1) % 10 == 0) {
-            E_file << myState.getBinary() << endl;
+        if (n_swp+1 >= start_time) {
+            C_file << myState.getBinary() << endl;
         }
     }
+    C_file.close();
+
+    // Writing p(c) to file
+    E_file.open(E_file_name, fstream::trunc);
+    vector<int> temp_vec = myState.all_spins;
+    string bin_string;
+    for (int i=0; i<(int) pow(2.0,myState.getNumSpins()); ++i) {
+        bin_string = Ising::intToBin(i);
+        myState.binToSpins(zfill((int)myState.getNumSpins(),bin_string));
+        E_file << i << " " << myState.getProb() << endl;
+    }
+    myState.all_spins = temp_vec;
     E_file.close();
-    
+
     return 0;
 }
