@@ -14,9 +14,43 @@
 #include <cmath>
 #include <sys/stat.h>
 #include <unistd.h>
+#include <sstream>
+#include <iomanip>
 
+#include "input.h"
 
 using namespace std;
+
+const int num_sweeps = 10000;
+const int start_time = 10;
+
+string intToBin(unsigned int n) {
+    string str = "";
+    if (n / 2 != 0) {
+        str += intToBin(n / 2);
+    }
+    str += to_string(n % 2);
+    return str;
+}
+
+inline bool fileExists (const string& name) {
+    struct stat buffer;
+    return (stat (name.c_str(), &buffer) == 0);
+}
+
+string zfill(unsigned int z, string &s) {
+    s = string(z - s.length(),'0') + s;
+    return s;
+}
+
+string dtos(double db, int prec) {
+    stringstream stream;
+    stream << fixed << setprecision(prec) << db;
+    string s = stream.str();
+    return s;
+}
+
+
 
 class Ising {
     vector<vector<pair<int,double>>> neighbors;
@@ -125,15 +159,6 @@ public:
         return bin;
     }
     
-    static string intToBin(unsigned int n) {
-        string str = "";
-        if (n / 2 != 0) {
-            str += intToBin(n / 2);
-        }
-        str += to_string(n % 2);
-        return str;
-    }
-    
     void reset() {
         all_spins = original_spins;
     }
@@ -226,69 +251,84 @@ void WriteGrid(int size,
     }
 }
 
-inline bool fileExists (const string& name) {
-    struct stat buffer;
-    return (stat (name.c_str(), &buffer) == 0);
+void writePc(string E_file_name, Ising &state) {
+    ofstream E_file(E_file_name, fstream::trunc);
+    vector<int> temp_vec = state.all_spins;
+    string bin_string;
+    for (int i=0; i<(double) pow(2.0,state.getNumSpins()); ++i) {
+        bin_string = intToBin(i);
+        state.binToSpins(zfill((int)state.getNumSpins(),bin_string));
+        E_file << i << " " << state.getProb() << endl;
+    }
+    cout << state.getNumSpins() << endl;
+    double config_num = pow(2.0, state.getNumSpins());
+    cout << config_num << endl;
+    state.all_spins = temp_vec;
+    E_file.close();
 }
 
-string zfill(unsigned int z, string &s) {
-    s = string(z - s.length(),'0') + s;
-    return s;
+void writeMCMC(mt19937 &m, Ising &state, int sweep, string out_file_name) {
+    uniform_real_distribution<double> real_dist(0,1);
+    uniform_int_distribution<int> random_node(1,state.getNumSpins());
+    string beta_string = dtos(state.beta, 1);
+    string out_file = out_file_name + "_" + beta_string + ".txt";
+    ofstream outFile(out_file_name, fstream::trunc);
+    for (int n_swp=0; n_swp<num_sweeps; ++n_swp) {
+        for (int swp=0; swp<sweep; ++swp) {
+            int node_flip = random_node(m);
+            double alpha = state.getAlpha(node_flip);
+            double rand_var = real_dist(m);
+            if (rand_var < alpha) {
+                state.flipSpin(node_flip);
+            }
+        }
+        if (n_swp+1 >= start_time) {
+            outFile << state.getBinary() << endl;
+        }
+    }
+    outFile.close();
 }
 
 int main(int argc, char** argv) {
     // Random device
     random_device rd;
     mt19937 mt(rd());
-    uniform_real_distribution<double> real_dist(0,1);
     
-    int num_sweeps = 10000, start_time = 10;
-    int sweep = 10000;
-    double beta = 0.3;
+    // Getting variables from myInputFile
+    InputClass input;
+    string myInputFileName = "myInputFile.txt";
+    ifstream myInputFile(myInputFileName);
+    input.Read(myInputFile);
+    
+    //double beta = input.toDouble(input.GetVariable("beta"));
+    int Lx = input.toInteger(input.GetVariable("Lx"));
+    int grid_size = Lx,
+        N = grid_size*grid_size;
+    string out_file_name = input.GetVariable("outFile"),
+           spin_file_name = input.GetVariable("spinsFile"),
+           bond_file_name = input.GetVariable("bondsFile");
+    
+    // Arbitrary variables
+    int sweep = N;
+    vector<double> beta_list {0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.0E6};
 
-    string gridSpin="grid_spin.txt", gridBond="grid_bond.txt";
-    //bool not_file = (!fileExists(gridSpin) && !fileExists(gridBond));
-    int grid_size = 3;
-    WriteGrid(grid_size, mt, gridSpin, gridBond,true);//, not_file);
+    for (const auto &beta : beta_list) {
+        // Write initial configuration to spins and bonds files.
+        //Currently set to s_i=1 and J_ij=1 for all i,j.
+        //bool not_file = (!fileExists(spin_file_name) && !fileExists(bond_file_name));
+        WriteGrid(grid_size, mt, spin_file_name, bond_file_name,true);//, not_file);
 
-    //string spin_file="spin.txt", bond_file="bonds.txt";
-    string spin_file=gridSpin, bond_file=gridBond;
-    Ising myState (spin_file, bond_file, beta);
-    myState.printNeighbors();
-    cout << "E = " << myState.getE() << endl;
-    uniform_int_distribution<int> random_node(1,myState.getNumSpins());
+        // Making state object from files and beta.
+        Ising myState (spin_file_name, bond_file_name, beta);
+        //myState.printNeighbors();
+        cout << "E = " << myState.getE() << endl;
 
-    ofstream C_file, E_file;
-    string C_file_name="grid_config.txt", E_file_name="grid_energy.txt";
+        // MARKOV CHAIN MONTE CARLO:
+        writeMCMC(mt, myState, sweep, out_file_name);
 
-    // MARKOV CHAIN MONTE CARLO:
-    C_file.open(C_file_name, fstream::trunc);
-    for (int n_swp=0; n_swp<num_sweeps; ++n_swp) {
-        for (int swp=0; swp<sweep; ++swp) {
-            int node_flip = random_node(mt);
-            double alpha = myState.getAlpha(node_flip);
-            double rand_var = real_dist(mt);
-            if (rand_var < alpha) {
-                myState.flipSpin(node_flip);
-            }
-        }
-        if (n_swp+1 >= start_time) {
-            C_file << myState.getBinary() << endl;
-        }
+        // Writing p(c) to file
+        //writePc(E_file_name, myState);
     }
-    C_file.close();
-
-    // Writing p(c) to file
-    E_file.open(E_file_name, fstream::trunc);
-    vector<int> temp_vec = myState.all_spins;
-    string bin_string;
-    for (int i=0; i<(int) pow(2.0,myState.getNumSpins()); ++i) {
-        bin_string = Ising::intToBin(i);
-        myState.binToSpins(zfill((int)myState.getNumSpins(),bin_string));
-        E_file << i << " " << myState.getProb() << endl;
-    }
-    myState.all_spins = temp_vec;
-    E_file.close();
-
+    
     return 0;
 }

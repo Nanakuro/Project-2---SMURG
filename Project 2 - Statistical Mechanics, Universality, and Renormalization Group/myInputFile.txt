@@ -1,0 +1,6 @@
+beta=0.3
+Lx=27
+Ly=27
+outFile=grid_config
+bondsFile=grid_bond
+spinsFile=grid_spin
