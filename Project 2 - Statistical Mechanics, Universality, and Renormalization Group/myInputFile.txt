@@ -1,6 +1,6 @@
 beta=0.3
 Lx=27
 Ly=27
-outFile=grid_config
+outFile=grid_beta
 bondsFile=grid_bond
 spinsFile=grid_spin

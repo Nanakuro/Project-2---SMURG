@@ -23,6 +23,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		04F011102227F0E800280D3D /* Ising.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = Ising.h; sourceTree = "<group>"; };
 		04FCC21B221DBB7800D5792C /* Project 2 - Statistical Mechanics, Universality, and Renormalization Group */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = "Project 2 - Statistical Mechanics, Universality, and Renormalization Group"; sourceTree = BUILT_PRODUCTS_DIR; };
 		04FCC21E221DBB7800D5792C /* ising.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = ising.cpp; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -58,6 +59,7 @@
 			isa = PBXGroup;
 			children = (
 				04FCC21E221DBB7800D5792C /* ising.cpp */,
+				04F011102227F0E800280D3D /* Ising.h */,
 			);
 			path = "Project 2 - Statistical Mechanics, Universality, and Renormalization Group";
 			sourceTree = "<group>";
