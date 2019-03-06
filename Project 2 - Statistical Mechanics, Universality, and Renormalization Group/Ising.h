@@ -224,11 +224,19 @@ public:
         return bin;
     }
     
+    void randomize(mt19937 &m) {
+        uniform_int_distribution<int> rand_spin(0,1);
+        for (int i=0; i<getNumSpins(); ++i) {
+            int r = rand_spin(m);
+            all_spins[i] = r==1 ? 1 : -1;
+        }
+    }
+    
     void reset() {
         all_spins = original_spins;
     }
     
-    void printNeighbors(){
+    void printNeighbors() {
         for (int i=0; i < neighbors.size(); ++i) {
             cout << "Node " << i+1 << ":";
             for (int j=0; j < neighbors[i].size(); ++j) {

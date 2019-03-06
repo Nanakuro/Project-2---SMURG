@@ -60,6 +60,36 @@ void writeMCMC(mt19937 &m, Ising &state, int sweep, string out_file_prefix) {
     outFile.close();
 }
 
+void writeTestZero(mt19937 &m, Ising &state, int sweep, string out_file_prefix) {
+    string beta_string = dtos(state.getBeta(), 1);
+    string out_file_name = out_file_prefix + "_" + beta_string + "_test.txt";
+    ofstream outFile(out_file_name, fstream::trunc);
+    for (int n_swp=0; n_swp<num_sweeps; ++n_swp) {
+        state.randomize(m);
+        if (n_swp+1 >= start_time) {
+            outFile << state.getBinary() << " " << state.getE() << " " << state.getM2() << endl;
+        }
+    }
+    outFile.close();
+}
+
+void writeTestInf(mt19937 &m, Ising &state, int sweep, string out_file_prefix) {
+    string beta_string = dtos(state.getBeta(), 1);
+    string out_file_name = out_file_prefix + "_" + beta_string + "_test.txt";
+    ofstream outFile(out_file_name, fstream::trunc);
+    uniform_int_distribution<int> rand_int(0,1);
+    int flag = rand_int(m);
+    char flag_char = flag==1 ? 1 : 0;
+    string state_string = string(state.getNumSpins(), flag_char);
+    state.binToSpins(state_string);
+    for (int n_swp=0; n_swp<num_sweeps; ++n_swp) {
+        if (n_swp+1 >= start_time) {
+            outFile << state.getBinary() << " " << state.getE() << " " << state.getM2() << endl;
+        }
+    }
+    outFile.close();
+}
+
 int main(int argc, char** argv) {
     // Random device
     random_device rd;
@@ -83,23 +113,30 @@ int main(int argc, char** argv) {
     vector<double> beta_list {0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.0E6};
 
     // Loop through beta_list
-    for (const auto &beta : beta_list) {
-        // Write initial configuration to spins and bonds files.
-        //Currently set to s_i=1 and J_ij=1 for all i,j.
-        //bool not_file = (!fileExists(spin_file_name) && !fileExists(bond_file_name));
-        WriteGrid(grid_size, mt, spin_name, bond_name,true);//, not_file);
-
-        // Making state object from files and beta.
-        Ising myState(spin_name, bond_name, beta);
-        //myState.printNeighbors();
-        cout << "E = " << myState.getE() << endl;
-
-        // MARKOV CHAIN MONTE CARLO:
-        writeMCMC(mt, myState, sweep, out_name);
-
-        // Writing p(c) to file
-        //writeTheoreticalProbC(E_file_name, myState);
-    }
+//    for (const auto &beta : beta_list) {
+//        // Write initial configuration to spins and bonds files.
+//        //Currently set to s_i=1 and J_ij=1 for all i,j.
+//        //bool not_file = (!fileExists(spin_file_name) && !fileExists(bond_file_name));
+//        WriteGrid(grid_size, mt, spin_name, bond_name,true);//, not_file);
+//
+//        // Making state object from files and beta.
+//        Ising myState(spin_name, bond_name, beta);
+//        //myState.printNeighbors();
+//        cout << "E = " << myState.getE() << endl;
+//
+//        // MARKOV CHAIN MONTE CARLO:
+//        //writeMCMC(mt, myState, sweep, out_name);
+//
+//        // Writing p(c) to file
+//        //writeTheoreticalProbC(E_file_name, myState);
+//    }
+    
+    // Write test sample for beta=0.0 and beta=inf
+    Ising myState(spin_name, bond_name, 0.0);
+    writeTestZero(mt, myState, sweep, out_name);
+    
+    myState.setBeta(1E6);
+    writeTestInf(mt, myState, sweep, out_name);
     
     return 0;
 }
