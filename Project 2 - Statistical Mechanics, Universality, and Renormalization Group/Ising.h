@@ -49,8 +49,9 @@ string dtos(double db, int prec) {
     return s;
 }
 
+//void WriteNeighbor(int size,)
+
 void WriteGrid(int size,
-               mt19937 &m,
                string spinFile, string bondFile,
                bool file_exists=false) {
     
@@ -69,8 +70,10 @@ void WriteGrid(int size,
             //int rand = int_dist(m);
             //int spin = rand==0 ? -1 : 1;
             //h = r_dist(m);
-            sp_file << node << " " << spin << " " << h << endl;
             //J = r_dist(m);
+            
+            sp_file << node << " " << spin << " " << h << endl;
+            
             int left = node - 1,
             right = node + 1,
             up = node - size,
@@ -108,14 +111,116 @@ public:
     vector<int> all_spins;
     vector<double> magfield;
     Ising(string, string, double);
-    vector<vector<pair<int,double>>> getNeighbors() { return neighbors; };
     
-    int getNumSpins() {
-        return (int)all_spins.size();
+    vector<vector<pair<int,double>>> getNeighbors()         { return neighbors; }
+    int getNumSpins()                                       { return (int)all_spins.size(); }
+    int getSize()                                           { return (int)sqrt(getNumSpins()); }
+    void flipSpin(int spin_flip)                            { all_spins[spin_flip-1] *= -1; }
+    void reset()                                            { all_spins = original_spins; }
+    void setBeta(double b)                                  { beta = b; }
+    double getBeta()                                        { return beta; }
+    double getZ()                                           { return Z; }
+    double getAlpha(int spin_flip)                          { return exp(-beta*deltaE(spin_flip)); }
+    double getProb()                                        { return exp(-beta*getE())/Z; }
+    void setNewDefault()                                    { original_spins = all_spins; }
+    void setNewDefault(vector<int> vec)                     { original_spins = vec; }
+    
+    void copyState(Ising other_state) {
+        all_spins = other_state.all_spins;
+        magfield = other_state.magfield;
+        Z = other_state.getZ();
+        beta = other_state.getBeta();
+        neighbors = other_state.getNeighbors();
+        
+        original_spins = all_spins;
     }
     
-    void flipSpin(int spin_flip) {
-        all_spins[spin_flip-1] *= -1;
+//    void setNeighbors(int size) {
+//        neighbors.resize(size);
+//        for (int i=0; i<size; ++i) {
+//            double J = 1.0;
+//            int node = i+1;
+//
+//            int left = node - 1,
+//            right = node + 1,
+//            up = node - size,
+//            down = node + size;
+//
+//            (left % size == 0) && (left += size);
+//            (right % size == 1) && (right -= size);
+//            (up < 1) && (up += size*size);
+//            (down > size*size) && (down -= size*size);
+//
+//            neighbors[i].resize(0);
+//            neighbors[i].push_back(make_pair(left, J));
+//            neighbors[i].push_back(make_pair(right, J));
+//            neighbors[i].push_back(make_pair(down, J));
+//            neighbors[i].push_back(make_pair(up, J));
+//        }
+//    }
+    
+    void printNeighbors() {
+        for (int i=0; i < neighbors.size(); ++i) {
+            cout << "Node " << i+1 << ":";
+            for (int j=0; j < neighbors[i].size(); ++j) {
+                pair<int,double> neighbor_pair = neighbors[i][j];
+                cout << " (" << neighbor_pair.first << ", " << neighbor_pair.second << ")";
+            }
+            cout << endl;
+        }
+    }
+    
+    void printNeighbors(string fileName) {
+        ofstream file(fileName, fstream::trunc);
+        for (int i=0; i < neighbors.size(); ++i) {
+            file << "Node " << i+1 << ":";
+            for (int j=0; j < neighbors[i].size(); ++j) {
+                pair<int,double> neighbor_pair = neighbors[i][j];
+                file << " (" << neighbor_pair.first << ", " << neighbor_pair.second << ")";
+            }
+            file << endl;
+        }
+        file.close();
+    }
+    
+    void printSpins() {
+        int size = (int) sqrt((double)getNumSpins());
+        for (int i=0; i<size; ++i) {
+            for (int j=0; j<size; ++j) {
+                string sp_str = all_spins[i*size+j]==1 ? "+" : "-";
+                cout << sp_str << " ";
+            }
+            cout << endl;
+        }
+    }
+    
+    void printSpins(string fileName) {
+        ofstream myFile(fileName, fstream::trunc);
+        int size = (int) sqrt((double)getNumSpins());
+        for (int i=0; i<size; ++i) {
+            for (int j=0; j<size; ++j) {
+                int sp = all_spins[i*size+j]==1 ? 1 : 0;
+                myFile << sp << " ";
+            }
+            myFile << endl;
+        }
+        myFile.close();
+    }
+    
+    void printSpins(int block) {
+        int size = getSize();
+        for (int i=0; i<size; ++i) {
+            int node = 0;
+            for (int j=0; j<size; ++j) {
+                int idx = i*size + j;
+                node = idx + 1;
+                string sp_str = all_spins[idx]==1 ? "+" : "-";
+                cout << sp_str << " ";
+                if (node % block == 0) { cout << " "; }
+            }
+            cout << endl;
+            if (node % (block*size) == 0) { cout << endl; }
+        }
     }
     
     double getE() {
@@ -128,11 +233,9 @@ public:
                 if (node < neighbor) {
                     double J = neighbors[i][j].second;
                     int spin_neighbor = all_spins[neighbor-1];
-                    //cout << "Node " << node << "\t neighbor=" << neighbor << "\t J x spin x spin_neighbor = " << J*spin * spin_neighbor << endl;
                     E += -J * spin * spin_neighbor;
                 }
             }
-            //cout << "Node " << node << "\t spin x h = " << h*spin << endl;
             E += h*spin;
         }
         return E;
@@ -140,26 +243,15 @@ public:
     
     double deltaE(int spin_flip) {
         double deltaE = 0.0;
-        
-        // Complicated code
-        //flipSpin(spin_flip);
         int idx = spin_flip-1;
         deltaE += -2*all_spins[idx] * magfield[idx];
-        
+
         for (int i=0; i < neighbors[idx].size(); ++i) {
             int neighbor = neighbors[idx][i].first;
             double J = neighbors[idx][i].second;
             int spin_neighbor = all_spins[neighbor-1];
             deltaE += 2*J * all_spins[idx] * spin_neighbor;
         }
-        
-        // Simple code
-        //        double E_beg = getE();
-        //        flipSpin(spin_flip);
-        //        double E_fin = getE();
-        //        deltaE = E_fin - E_beg;
-        
-        //flipSpin(spin_flip);
         return deltaE;
     }
     
@@ -167,18 +259,10 @@ public:
         double M = 0.0;
         double tot_spins = (double)getNumSpins();
         for (const auto &sp : all_spins) {
-            M += sp;
+            M += sp/tot_spins;
         }
-        double M2 = M*M/tot_spins;
+        double M2 = M*M;
         return M2;
-    }
-    
-    void setBeta(double b) {
-        beta = b;
-    }
-    
-    double getBeta() {
-        return beta;
     }
     
     void setZ(double b) {
@@ -196,18 +280,6 @@ public:
             ++decimal;
         };
         all_spins = temp_spins;
-    }
-    
-    double getZ() {
-        return Z;
-    }
-    
-    double getAlpha(int spin_flip) {
-        return exp(-beta*deltaE(spin_flip));
-    }
-    
-    double getProb() {
-        return exp(-beta*getE())/Z;
     }
     
     void binToSpins(string binary) {
@@ -232,19 +304,51 @@ public:
         }
     }
     
-    void reset() {
-        all_spins = original_spins;
+    vector<int> centers(int block_size) {
+        vector<int> c_vec;
+        int r = (int)(block_size/2);
+        int grid_size = getSize();
+        int start_node = grid_size*r + r+1;
+        for (int n = start_node; n < getNumSpins(); n += block_size*grid_size) {
+            for (int c = n; c < n+grid_size; c += block_size) {
+                c_vec.push_back(c);
+            }
+        }
+        return c_vec;
     }
     
-    void printNeighbors() {
-        for (int i=0; i < neighbors.size(); ++i) {
-            cout << "Node " << i+1 << ":";
-            for (int j=0; j < neighbors[i].size(); ++j) {
-                pair<int,double> neighbor_pair = neighbors[i][j];
-                cout << " (" << neighbor_pair.first << ", " << neighbor_pair.second << ")";
-            }
-            cout << endl;
+    int spinBlock(int center, int block_size) {
+        int r = (int)(block_size/2);
+        int grid_size = getSize();
+        if (block_size % 2 == 0) {
+            return 0;
         }
+        int block_spin = 0;
+        for (int n = center - r*grid_size; n < center + r*grid_size+1; n+=grid_size) {
+            for (int m = n-r; m < n+r+1; ++m) {
+                int idx = m-1;
+                block_spin += all_spins[idx];
+            }
+        }
+        return block_spin;
+    }
+    
+    vector<int> CoarseGrain(int scale, int times=1) {
+        int new_size = (int)(getSize()/scale);
+        //int new_n_spins = new_size * new_size;
+        if (new_size >= 1) {
+            if (times>1) {
+                all_spins = CoarseGrain(scale,times-1);
+            }
+            vector<int> new_grid;
+            vector<int> center_list = centers(scale);
+            for (const auto &c : center_list) {
+                int new_spin = spinBlock(c,scale)>0 ? 1 : -1;
+                new_grid.push_back(new_spin);
+            }
+            return new_grid;
+        }
+        return all_spins;
     }
 };
 

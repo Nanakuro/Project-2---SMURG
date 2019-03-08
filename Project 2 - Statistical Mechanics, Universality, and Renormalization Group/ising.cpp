@@ -90,6 +90,60 @@ void writeTestInf(mt19937 &m, Ising &state, int sweep, string out_file_prefix) {
     outFile.close();
 }
 
+vector<double> makeSequenceVec(double start, double end, int num_steps, bool endpoint=false) {
+    vector<double> list;
+    double step = (endpoint) ? (end - start)/(num_steps-1.0) : (end - start)/num_steps;
+    double s = start;
+    if (start <= end) {
+        while (s - end <= 1e-6) {
+            list.push_back(s);
+            s += step;
+        }
+        if (!endpoint) { list.pop_back(); }
+    } else {
+        cout << "Error: start is larger than end!" << endl;
+    }
+    return list;
+}
+
+void writeCv(mt19937 &m, Ising &state, int sweep, string out_file_prefix, vector<double> beta_list) {
+    uniform_real_distribution<double> real_dist(0,1);
+    uniform_int_distribution<int> random_node(1,state.getNumSpins());
+    string file_string = "Cv";
+    string out_file_name = out_file_prefix + "_" + file_string + ".txt";
+    ofstream outFile(out_file_name, fstream::trunc);
+    for (const auto &beta : beta_list) {
+        state.reset();
+        state.setBeta(beta);
+        for (int n_swp=0; n_swp<num_sweeps; ++n_swp) {
+            for (int swp=0; swp<sweep; ++swp) {
+                int node_flip = random_node(m);
+                double alpha = state.getAlpha(node_flip);
+                double rand_var = real_dist(m);
+                if (rand_var < alpha) {
+                    state.flipSpin(node_flip);
+                }
+            }
+            if (n_swp+1 >= start_time) {
+                outFile << state.getE() << " ";
+            }
+        }
+        outFile << 1/state.getBeta() << endl;
+    }
+    outFile.close();
+    cout << "...done" << endl;
+}
+
+void writeCG(mt19937 &m, Ising &state, int cg_scale, string out_file_prefix) {
+    state.randomize(m);
+    state.setNewDefault();
+    string beta_string = dtos(state.getBeta(), 1);
+    string out_file_name = out_file_prefix + "_cgrain_" + beta_string + ".txt";
+    ofstream outFile(out_file_name, fstream::trunc);
+    
+    outFile.close();
+}
+
 int main(int argc, char** argv) {
     // Random device
     random_device rd;
@@ -109,13 +163,45 @@ int main(int argc, char** argv) {
            bond_name = input.GetVariable("bondsFile") + ".txt";
     
     // Arbitrary variables
-    int sweep = N;
-    vector<double> beta_list {0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.0E6};
+    int sweep = N;//, N_beta = 200;
+    
+    //vector<double> beta_list {0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.0E6};
+    
+//    vector<double> T_list = makeSequenceVec(1.25, 10, N_beta, true);
+//    vector<double> beta_list(T_list.size());
+//    for (int i=0; i<T_list.size(); ++i) {
+//        beta_list[beta_list.size()-1-i] = 1/T_list[i];
+//    }
 
+    vector<double> beta_list {0.0,0.3,0.4,0.5,0.6,1.0E6};
+    
+    WriteGrid(grid_size, spin_name, bond_name,true);//, not_file);
+    //
+    // Making state object from files and beta.
+    Ising myState(spin_name, bond_name, beta_list[0]);
+    
+    // Write the MCMC energies and betas into a file
+    //writeCv(mt, myState, sweep, out_name, beta_list);
+    
+    myState.randomize(mt);
+    myState.setNewDefault();
+    int cg_size = 3;
+    
+    myState.printSpins(cg_size);
+    cout << endl;
+    myState.all_spins = myState.CoarseGrain(cg_size);
+    myState.printSpins(cg_size);
+    myState.all_spins = myState.CoarseGrain(cg_size);
+    myState.printSpins();
+    myState.reset();
+    cout << endl;
+    myState.all_spins = myState.CoarseGrain(cg_size,3);
+    myState.printSpins();
     // Loop through beta_list
 //    for (const auto &beta : beta_list) {
 //        // Write initial configuration to spins and bonds files.
 //        //Currently set to s_i=1 and J_ij=1 for all i,j.
+//
 //        //bool not_file = (!fileExists(spin_file_name) && !fileExists(bond_file_name));
 //        WriteGrid(grid_size, mt, spin_name, bond_name,true);//, not_file);
 //
@@ -125,18 +211,20 @@ int main(int argc, char** argv) {
 //        cout << "E = " << myState.getE() << endl;
 //
 //        // MARKOV CHAIN MONTE CARLO:
-//        //writeMCMC(mt, myState, sweep, out_name);
+//        writeMCMC(mt, myState, sweep, out_name);
 //
 //        // Writing p(c) to file
 //        //writeTheoreticalProbC(E_file_name, myState);
+//        //cout << beta << " ";
 //    }
+    //cout << endl << beta_list.size() << endl;
     
     // Write test sample for beta=0.0 and beta=inf
-    Ising myState(spin_name, bond_name, 0.0);
-    writeTestZero(mt, myState, sweep, out_name);
-    
-    myState.setBeta(1E6);
-    writeTestInf(mt, myState, sweep, out_name);
+//    Ising myState(spin_name, bond_name, 0.0);
+//    writeTestZero(mt, myState, sweep, out_name);
+//
+//    myState.setBeta(1E6);
+//    writeTestInf(mt, myState, sweep, out_name);
     
     return 0;
 }

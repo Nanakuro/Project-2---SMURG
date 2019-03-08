@@ -1,6 +1,6 @@
-beta=0.3
-Lx=27
-Ly=27
-outFile=grid
+beta=0.0
+Lx=81
+Ly=81
+outFile=grid_RG
 bondsFile=grid_bond
 spinsFile=grid_spin
