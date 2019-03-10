@@ -49,7 +49,21 @@ string dtos(double db, int prec) {
     return s;
 }
 
-//void WriteNeighbor(int size,)
+vector<double> makeSequenceVec(double start, double end, int num_steps, bool endpoint=false) {
+    vector<double> list;
+    double step = (endpoint) ? (end - start)/(num_steps-1.0) : (end - start)/num_steps;
+    double s = start;
+    if (start <= end) {
+        while (s - end <= 1e-6) {
+            list.push_back(s);
+            s += step;
+        }
+        if (!endpoint) { list.pop_back(); }
+    } else {
+        cout << "Error: start is larger than end!" << endl;
+    }
+    return list;
+}
 
 void WriteGrid(int size,
                string spinFile, string bondFile,
@@ -103,7 +117,6 @@ void WriteGrid(int size,
 }
 
 class Ising {
-private:
     vector<vector<pair<int,double>>> neighbors; // { _node1_:{(neighbor1, J11),(neighbor2, J12) ...}, _node2_:{(_,_),...},... }
     vector<int> original_spins; // = all_spins. Keep the initial spin configuration
     double Z, beta;
@@ -113,17 +126,17 @@ public:
     Ising(string, string, double);
     
     vector<vector<pair<int,double>>> getNeighbors()         { return neighbors; }
-    int getNumSpins()                                       { return (int)all_spins.size(); }
-    int getSize()                                           { return (int)sqrt(getNumSpins()); }
-    void flipSpin(int spin_flip)                            { all_spins[spin_flip-1] *= -1; }
-    void reset()                                            { all_spins = original_spins; }
-    void setBeta(double b)                                  { beta = b; }
-    double getBeta()                                        { return beta; }
-    double getZ()                                           { return Z; }
-    double getAlpha(int spin_flip)                          { return exp(-beta*deltaE(spin_flip)); }
-    double getProb()                                        { return exp(-beta*getE())/Z; }
-    void setNewDefault()                                    { original_spins = all_spins; }
-    void setNewDefault(vector<int> vec)                     { original_spins = vec; }
+    void    flipSpin(int spin_flip)                         { all_spins[spin_flip-1] *= -1; }
+    void    reset()                                         { all_spins = original_spins; }
+    void    setBeta(double b)                               { beta = b; }
+    void    setNewDefault()                                 { original_spins = all_spins; }
+    void    setNewDefault(vector<int> vec)                  { original_spins = vec; }
+    int     getNumSpins()                                   { return (int)all_spins.size(); }
+    int     getSize()                                       { return (int)sqrt(getNumSpins()); }
+    double  getBeta()                                       { return beta; }
+    double  getZ()                                          { return Z; }
+    double  getAlpha(int spin_flip)                         { return exp(-beta*deltaE(spin_flip)); }
+    double  getProb()                                       { return exp(-beta*getE())/Z; }
     
     void copyState(Ising other_state) {
         all_spins = other_state.all_spins;
@@ -296,7 +309,8 @@ public:
         return bin;
     }
     
-    void randomize(mt19937 &m) {
+    void randomize(mt19937 &m, int size=0) {
+        if (size > 0) { all_spins.resize(size); }
         uniform_int_distribution<int> rand_spin(0,1);
         for (int i=0; i<getNumSpins(); ++i) {
             int r = rand_spin(m);
@@ -349,6 +363,10 @@ public:
             return new_grid;
         }
         return all_spins;
+    }
+    
+    void autoCG(int scale, int times=1) {
+        all_spins = CoarseGrain(scale,times);
     }
 };
 

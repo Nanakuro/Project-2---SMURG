@@ -163,9 +163,9 @@ def PlotM2Test(M2, M2_bin, b):
     M2_mean, M2_var, M2_err, M2_tau = stats.Stats(np.array(M2))
     plt.axvline(M2_mean, lw=0.25, label=r'test $\langle M^2\rangle$')
 
-def PlotMat(string, size, beta):
+def PlotMatBeta(string, size, beta):
     if len(string) == size**2:
-        str_split = [ c for c in string ]
+        str_split = [ s for s in string ]
         str_list = [ str_split[i:i+size] for i in range(0, len(str_split),size) ]
         str_list = np.array(str_list, int)
         fig = plt.figure()
@@ -180,7 +180,18 @@ def PlotMat(string, size, beta):
     else:
         print('Cannot split string into a %gx%g grid' % (size, size))
     
-#def PlotM2vsBeta(mean_M2,)
+def PlotMatCG(string, size):
+    if len(string) == size**2:
+        str_split = [ s for s in string ]
+        str_list = [ str_split[i:i+size] for i in range(0, len(str_split),size) ]
+        str_list = np.array(str_list, int)
+        fig = plt.figure()
+        plt.title(r'Snapshot CG $%d\times%d$' % (size,size))
+        save_name = 'img/grid_snapshot_CG_%d.png' % size
+        plt.imshow(str_list)
+        plt.savefig(save_name, dpi=300)
+    else:
+        print('Cannot split string into a %dx%d grid' % (size, size))
 
 '''    GRAPH E & M^2 BETA = 0.0, 0.1,..., 1.0, 1000000.0
 
@@ -248,6 +259,7 @@ plt.legend()
 plt.savefig('img/M2_vs_beta.png', dpi=300)
 '''
 
+'''    PLOT C_v vs T and E vs T
 E_mean_list, T_list = [], []
 
 Cv_file = 'grid_Cv.txt'
@@ -282,26 +294,70 @@ plt.axvline(T_list[ind_max_Cv], color='y', label=r'Max $C_v$ at $T = %.6f$' % T_
 
 plt.legend()
 plt.savefig('img/grid_Cv_vs_T.png', dpi=300)
+'''
+
+'''    Plot coarse grained snapshots comparison
+state_list = []
+file_name = 'grid_rand_CG_compare.txt'
+with open(file_name, 'r') as f:
+    for line in f:
+        line = line.strip().split()
+        state_list.append((line[0], int(line[1])))
+
+for s in state_list:
+    PlotMatCG(s[0],s[1])
+'''
+
+nat_m2_mean_list, cg_m2_mean_list = [], []
+beta_list = []
+
+native_file = 'grid_RG/grid_RG.txt'
+cg_file     = 'grid_RG/grid_RG_cg.txt'
+
+with open(native_file,'r') as nat, open(cg_file,'r') as cg:
+    for natline in nat:
+        natline = natline.strip().split()
+        beta_list.append(float(natline[0]))
+        
+        nat_m2 = natline[1:]
+        nat_m2 = np.array(nat_m2, float)
+        nat_m2_mean,_,_,_ = stats.Stats(nat_m2)
+        nat_m2_mean_list.append(nat_m2_mean)
+    
+    for cgline in cg:
+        cgline = cgline.strip().split()
+        cg_m2 = cgline[1:]
+        cg_m2 = np.array(cg_m2, float)
+        cg_m2_mean,_,_,_ = stats.Stats(cg_m2)
+        cg_m2_mean_list.append(cg_m2_mean)
         
 
+print(nat_m2_mean_list)
+print(cg_m2_mean_list)
+fig = plt.figure()
+plt.title(r'$\langle M^2 \rangle$ vs $\beta$')
+plt.xlabel(r'$\beta$')
+plt.ylabel(r'$\langle M^2 \rangle$')
+plt.plot(beta_list, nat_m2_mean_list, label=r'Native')
+plt.plot(beta_list, cg_m2_mean_list, label=r'Coarse grained')
+plt.legend()
+plt.show()
     
     
     
 
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

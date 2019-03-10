@@ -42,7 +42,7 @@ void writeMCMC(mt19937 &m, Ising &state, int sweep, string out_file_prefix) {
     uniform_real_distribution<double> real_dist(0,1);
     uniform_int_distribution<int> random_node(1,state.getNumSpins());
     string beta_string = dtos(state.getBeta(), 1);
-    string out_file_name = out_file_prefix + "_" + beta_string + ".txt";
+    string out_file_name = "grid_RG/" + out_file_prefix + "_" + beta_string + ".txt";
     ofstream outFile(out_file_name, fstream::trunc);
     for (int n_swp=0; n_swp<num_sweeps; ++n_swp) {
         for (int swp=0; swp<sweep; ++swp) {
@@ -54,10 +54,40 @@ void writeMCMC(mt19937 &m, Ising &state, int sweep, string out_file_prefix) {
             }
         }
         if (n_swp+1 >= start_time) {
-            outFile << state.getBinary() << " " << state.getE() << " " << state.getM2() << endl;
+            outFile << state.getM2() << endl;
         }
     }
     outFile.close();
+//    cout << "...MCMC done" << endl;
+}
+
+void writeMCMC(mt19937 &m, Ising &state, int sweep, string out_file_prefix, vector<double> beta_list) {
+    uniform_real_distribution<double> real_dist(0,1);
+    uniform_int_distribution<int> random_node(1,state.getNumSpins());
+    string beta_string = dtos(state.getBeta(), 1);
+    string out_file_name = "grid_RG/" + out_file_prefix + ".txt";
+    ofstream outFile(out_file_name, fstream::trunc);
+    for (const auto &b : beta_list) {
+        state.reset();
+        state.setBeta(b);
+        outFile << state.getBeta() << " ";
+        for (int n_swp=0; n_swp<num_sweeps; ++n_swp) {
+            for (int swp=0; swp<sweep; ++swp) {
+                int node_flip = random_node(m);
+                double alpha = state.getAlpha(node_flip);
+                double rand_var = real_dist(m);
+                if (rand_var < alpha) {
+                    state.flipSpin(node_flip);
+                }
+            }
+            if (n_swp+1 >= start_time) {
+                outFile << state.getM2() << " ";
+            }
+        }
+        outFile << endl;
+    }
+    outFile.close();
+    //    cout << "...MCMC done" << endl;
 }
 
 void writeTestZero(mt19937 &m, Ising &state, int sweep, string out_file_prefix) {
@@ -90,22 +120,6 @@ void writeTestInf(mt19937 &m, Ising &state, int sweep, string out_file_prefix) {
     outFile.close();
 }
 
-vector<double> makeSequenceVec(double start, double end, int num_steps, bool endpoint=false) {
-    vector<double> list;
-    double step = (endpoint) ? (end - start)/(num_steps-1.0) : (end - start)/num_steps;
-    double s = start;
-    if (start <= end) {
-        while (s - end <= 1e-6) {
-            list.push_back(s);
-            s += step;
-        }
-        if (!endpoint) { list.pop_back(); }
-    } else {
-        cout << "Error: start is larger than end!" << endl;
-    }
-    return list;
-}
-
 void writeCv(mt19937 &m, Ising &state, int sweep, string out_file_prefix, vector<double> beta_list) {
     uniform_real_distribution<double> real_dist(0,1);
     uniform_int_distribution<int> random_node(1,state.getNumSpins());
@@ -134,14 +148,75 @@ void writeCv(mt19937 &m, Ising &state, int sweep, string out_file_prefix, vector
     cout << "...done" << endl;
 }
 
-void writeCG(mt19937 &m, Ising &state, int cg_scale, string out_file_prefix) {
+void writeCompareCG(mt19937 &m, Ising &state, int cg_scale, string out_file_prefix) {
+    string out_file_name = out_file_prefix + "_compare.txt";
+    ofstream outFile(out_file_name, fstream::trunc);
     state.randomize(m);
     state.setNewDefault();
-    string beta_string = dtos(state.getBeta(), 1);
-    string out_file_name = out_file_prefix + "_cgrain_" + beta_string + ".txt";
-    ofstream outFile(out_file_name, fstream::trunc);
+    
+    outFile << state.getBinary() << " " << state.getSize() << endl;
+    state.autoCG(cg_scale);
+    outFile << state.getBinary() << " " << state.getSize() << endl;
+    state.autoCG(cg_scale);
+    outFile << state.getBinary() << " " << state.getSize() << endl;
     
     outFile.close();
+}
+
+void writeCG(mt19937 &m, Ising &state, int sweep, string out_file_prefix, int cg_scale, vector<double> beta_list) {
+    uniform_real_distribution<double> real_dist(0,1);
+    uniform_int_distribution<int> random_node(1,state.getNumSpins());
+    string beta_string = dtos(state.getBeta(), 1);
+    string out_file_name = "grid_RG/" + out_file_prefix + "_" + beta_string + "_cg.txt";
+    ofstream outFile(out_file_name, fstream::trunc);
+    for (const auto &b : beta_list) {
+        state.reset();
+        state.setBeta(b);
+        outFile << state.getBeta() << " ";
+        for (int n_swp=0; n_swp<num_sweeps; ++n_swp) {
+            for (int swp=0; swp<sweep; ++swp) {
+                int node_flip = random_node(m);
+                double alpha = state.getAlpha(node_flip);
+                double rand_var = real_dist(m);
+                if (rand_var < alpha) {
+                    state.flipSpin(node_flip);
+                }
+            }
+            if (n_swp+1 == num_sweeps) {
+                vector<int> temp = state.all_spins;
+                state.autoCG(cg_scale);
+                outFile << state.getBinary() << " " << state.getSize() << endl;
+                state.all_spins = temp;
+            }
+        }
+        outFile << endl;
+    }
+    outFile.close();
+//    cout << "...CG done" << endl;
+}
+
+struct InputParams {
+    int Lx;
+    int cg_scale;
+    string out_file_name;
+    string spin_file_name;
+    string bond_file_name;
+};
+
+InputParams getInput(string inputFileName) {
+    InputParams input_params;
+    
+    InputClass input;
+    ifstream inputFile(inputFileName);
+    input.Read(inputFile);
+    
+    input_params.Lx = input.toInteger(input.GetVariable("Lx"));
+    input_params.cg_scale = input.toInteger(input.GetVariable("cg_size"));
+    input_params.out_file_name = input.GetVariable("outFile");
+    input_params.spin_file_name = input.GetVariable("spinsFile") + ".txt";
+    input_params.bond_file_name = input.GetVariable("bondsFile") + ".txt";
+    
+    return input_params;
 }
 
 int main(int argc, char** argv) {
@@ -149,21 +224,19 @@ int main(int argc, char** argv) {
     random_device rd;
     mt19937 mt(rd());
     
+
+    
     // Getting variables from myInputFile
-    InputClass input;
-    string myInputFileName = "myInputFile.txt";
-    ifstream myInputFile(myInputFileName);
-    input.Read(myInputFile);
-    //double beta = input.toDouble(input.GetVariable("beta"));
-    int Lx = input.toInteger(input.GetVariable("Lx"));
-    int grid_size = Lx,
-        N = grid_size*grid_size;
-    string out_name = input.GetVariable("outFile"),
-           spin_name = input.GetVariable("spinsFile") + ".txt",
-           bond_name = input.GetVariable("bondsFile") + ".txt";
+    string myInputFileName = "myInputFileRG.txt";
+    InputParams params = getInput(myInputFileName);
+    int     grid_size   = params.Lx,
+            cg_size     = params.cg_scale;
+    string  out_name    = params.out_file_name,
+            spin_name   = params.spin_file_name,
+            bond_name   = params.bond_file_name;
     
     // Arbitrary variables
-    int sweep = N;//, N_beta = 200;
+    int sweep = grid_size*grid_size;//, N_beta = 200;
     
     //vector<double> beta_list {0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.0E6};
     
@@ -174,50 +247,95 @@ int main(int argc, char** argv) {
 //    }
 
     vector<double> beta_list {0.0,0.3,0.4,0.5,0.6,1.0E6};
+    //vector<double> beta_list = makeSequenceVec(0.0, 1.0, 101, true);
     
     WriteGrid(grid_size, spin_name, bond_name,true);//, not_file);
-    //
+
     // Making state object from files and beta.
-    Ising myState(spin_name, bond_name, beta_list[0]);
+    Ising myStateCG(spin_name, bond_name, beta_list[0]);
     
     // Write the MCMC energies and betas into a file
-    //writeCv(mt, myState, sweep, out_name, beta_list);
+//    writeCv(mt, myState, sweep, out_name, beta_list);
+
+    // Write a random grid to compare coarse graining
+//    writeCompareCG(mt, myState, cg_size, out_name);
+
+    // Write coarse grained:
+    //writeCG(mt, myState, sweep, out_name, cg_size, beta_list);
     
-    myState.randomize(mt);
-    myState.setNewDefault();
-    int cg_size = 3;
+    WriteGrid((int)round(grid_size/cg_size), spin_name, bond_name, true);//, not_file);
+    Ising myState(spin_name, bond_name, beta_list[0]);
     
-    myState.printSpins(cg_size);
-    cout << endl;
-    myState.all_spins = myState.CoarseGrain(cg_size);
-    myState.printSpins(cg_size);
-    myState.all_spins = myState.CoarseGrain(cg_size);
-    myState.printSpins();
-    myState.reset();
-    cout << endl;
-    myState.all_spins = myState.CoarseGrain(cg_size,3);
-    myState.printSpins();
+    //writeMCMC(mt, myState, sweep, out_name, beta_list);
+    
+////////////////////////////////////////////////////////////////////////////////////////////////
+//    uniform_real_distribution<double> real_dist(0,1);
+//    uniform_int_distribution<int> random_node(1,myState.getNumSpins());
+//    uniform_int_distribution<int> random_node_cg(1,myStateCG.getNumSpins());
+//    string out_file_name    = "grid_RG/" + out_name + ".txt";
+//    string out_file_name_cg = "grid_RG/" + out_name + "_cg.txt";
+//    ofstream outFile    (out_file_name, fstream::trunc);
+//    ofstream outFileCG  (out_file_name_cg, fstream::trunc);
+//
+//    for (const auto &b : beta_list) {
+//        myState.reset();
+//        myState.setBeta(b);
+//        myStateCG.reset();
+//        myStateCG.setBeta(b);
+//
+//        outFile     << myState.getBeta()    << " ";
+//        outFileCG   << myStateCG.getBeta()  << " ";
+//        for (int n_swp=0; n_swp<num_sweeps; ++n_swp) {
+//            for (int swp=0; swp<sweep; ++swp) {
+//
+//                int node_flip       = random_node(mt);
+//                int node_flip_cg    = random_node_cg(mt);
+//
+//                double alpha        = myState.getAlpha(node_flip);
+//                double alpha_cg     = myStateCG.getAlpha(node_flip_cg);
+//
+//                double rand_var     = real_dist(mt);
+//                double rand_var_cg  = real_dist(mt);
+//
+//                if (rand_var < alpha)           { myState.flipSpin(node_flip); }
+//                if (rand_var_cg < alpha_cg)     { myStateCG.flipSpin(node_flip_cg); }
+//            }
+//            if (n_swp+1 >= start_time) {
+//                vector<int> temp = myStateCG.all_spins;
+//                myStateCG.autoCG(cg_size);
+//                outFileCG << myStateCG.getM2() << " ";
+//                myStateCG.all_spins = temp;
+//
+//                outFile << myState.getM2() << " ";
+//            }
+//        }
+//        outFile << endl;
+//        outFileCG << endl;
+//    }
+//    outFile.close();
+//    outFileCG.close();
+////////////////////////////////////////////////////////////////////////////////////////////////
+
     // Loop through beta_list
 //    for (const auto &beta : beta_list) {
 //        // Write initial configuration to spins and bonds files.
 //        //Currently set to s_i=1 and J_ij=1 for all i,j.
 //
 //        //bool not_file = (!fileExists(spin_file_name) && !fileExists(bond_file_name));
-//        WriteGrid(grid_size, mt, spin_name, bond_name,true);//, not_file);
-//
-//        // Making state object from files and beta.
+//        WriteGrid(grid_size, spin_name, bond_name, true);//, not_file);
 //        Ising myState(spin_name, bond_name, beta);
-//        //myState.printNeighbors();
-//        cout << "E = " << myState.getE() << endl;
+//
+//        WriteGrid((int)round(grid_size/cg_size), spin_name, bond_name, true);//, not_file);
+//        myState = Ising(spin_name, bond_name, beta);
 //
 //        // MARKOV CHAIN MONTE CARLO:
 //        writeMCMC(mt, myState, sweep, out_name);
 //
-//        // Writing p(c) to file
+//        // Write p(c) to file:
 //        //writeTheoreticalProbC(E_file_name, myState);
-//        //cout << beta << " ";
+//
+//        cout << beta << endl << endl;
 //    }
-    //cout << endl << beta_list.size() << endl;
     
     // Write test sample for beta=0.0 and beta=inf
 //    Ising myState(spin_name, bond_name, 0.0);
