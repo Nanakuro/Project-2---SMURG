@@ -11,6 +11,8 @@ from matplotlib import mlab
 import numpy as np
 import stats
 from scipy.interpolate import UnivariateSpline
+from scipy.interpolate import interp1d
+from math import log
 '''
 grid_config = "grid_config.txt"
 grid_energy = "grid_energy.txt"
@@ -180,18 +182,30 @@ def PlotMatBeta(string, size, beta):
     else:
         print('Cannot split string into a %gx%g grid' % (size, size))
     
-def PlotMatCG(string, size):
+def PlotMatCG(string, size, beta):
     if len(string) == size**2:
         str_split = [ s for s in string ]
         str_list = [ str_split[i:i+size] for i in range(0, len(str_split),size) ]
         str_list = np.array(str_list, int)
         fig = plt.figure()
-        plt.title(r'Snapshot CG $%d\times%d$' % (size,size))
-        save_name = 'img/grid_snapshot_CG_%d.png' % size
+        plt.title(r'Snapshot CG $%d\times%d$ at $\beta = %s$' % (size,size,beta))
+        save_name = 'img/grid_snapshot_CG_%s_%d.png' % (beta, size)
         plt.imshow(str_list)
         plt.savefig(save_name, dpi=300)
     else:
-        print('Cannot split string into a %dx%d grid' % (size, size))
+        print('Cannot split string into a %dx%d grid for beta=%s' % (size, size, beta))
+
+def PlotArrows(x0, y0, f, count=1):
+    try:
+        if count % 2 == 1:
+            plt.arrow(x0, y0, f(x0)-x0, 0)
+            PlotArrows(f(x0), y0, f, count=count+1)
+        else:
+            plt.arrow(x0, y0, 0, f(y0)-y0)
+            PlotArrows(x0, f(y0), f, count=count+1)
+    except ValueError:
+        print('Arrows done')
+    
 
 '''    GRAPH E & M^2 BETA = 0.0, 0.1,..., 1.0, 1000000.0
 
@@ -208,7 +222,7 @@ for beta in beta_list:
     c_list, E_list, m2_list = [], [], []
     #beta = beta_list[0]
     #print(beta)
-    grid_file = 'grid_beta_%s.txt' % beta
+    grid_file = 'grid_beta/grid_beta_%s.txt' % beta
     with open(grid_file,'r') as f:
         for line in f:
             line = line.strip().split()
@@ -230,20 +244,32 @@ for beta in beta_list:
     
     if beta in beta_test:
         c_test, E_test, m2_test = [], [], []
-        grid_test = 'grid_beta_%s_test.txt' % beta
+        grid_test = 'grid_beta/grid_beta_%s_test.txt' % beta
         with open(grid_test,'r') as g:
             for line in g:
                 line = line.strip().split()
                 c_test.append(line[0])
                 E_test.append(int(line[1]))
                 m2_test.append(float(line[2]))
-        PlotEHist(E_list, E_bins, float(beta), test=E_test, save=True)
-        PlotM2Hist(m2_list, m2_bins, float(beta), test=m2_test, save=True)
+        #PlotEHist(E_list, E_bins, float(beta), test=E_test, save=True)
+        #PlotM2Hist(m2_list, m2_bins, float(beta), test=m2_test, save=True)
+        E_mean,_,_,_ = stats.Stats(np.array(E_list))
+        E_mean_test,_,_,_ = stats.Stats(np.array(E_test))
+        print('beta =', beta,' dataE =', E_mean, ' testE =', E_mean_test)
+        M2_mean,_,_,_ = stats.Stats(np.array(m2_list))
+        M2_mean_test,_,_,_ = stats.Stats(np.array(m2_test))
+        print('beta =', beta,' dataM2 =', M2_mean, ' testM2 =', M2_mean_test)
+        print()
     else:
-        PlotEHist(E_list, E_bins, float(beta), save=True)
-        PlotM2Hist(m2_list, m2_bins, float(beta), save=True)
-
+        #PlotEHist(E_list, E_bins, float(beta), save=True)
+        #PlotM2Hist(m2_list, m2_bins, float(beta), save=True)
+        E_mean,_,_,_ = stats.Stats(np.array(E_list))
+        print('beta =', beta,' dataE =', E_mean)
+        M2_mean,_,_,_ = stats.Stats(np.array(m2_list))
+        print('beta =', beta,' dataM2 =', M2_mean)
+        print()
 '''
+
 
 
 '''    PLOT M^2 vs beta
@@ -259,7 +285,9 @@ plt.legend()
 plt.savefig('img/M2_vs_beta.png', dpi=300)
 '''
 
+
 '''    PLOT C_v vs T and E vs T
+
 E_mean_list, T_list = [], []
 
 Cv_file = 'grid_Cv.txt'
@@ -296,18 +324,99 @@ plt.legend()
 plt.savefig('img/grid_Cv_vs_T.png', dpi=300)
 '''
 
-'''    Plot coarse grained snapshots comparison
-state_list = []
+'''    PLOT TEST CG SNAPSHOTS
 file_name = 'grid_rand_CG_compare.txt'
 with open(file_name, 'r') as f:
     for line in f:
         line = line.strip().split()
-        state_list.append((line[0], int(line[1])))
-
-for s in state_list:
-    PlotMatCG(s[0],s[1])
+        state = line[0]
+        size = int(line[1])
+        beta = '0.0'
+        
+        str_split = [ s for s in state ]
+        str_list = [ str_split[i:i+size] for i in range(0, len(str_split),size) ]
+        str_list = np.array(str_list, int)
+        fig = plt.figure()
+        plt.title(r'Snapshot test $%d\times%d$ at $\beta = %s$' % (size,size,beta))
+        save_name = 'grid_snapshot_CG_%s_%d_test.png' % (beta, size)
+        plt.imshow(str_list)
+        plt.savefig(save_name, dpi=300)
 '''
 
+'''    Plot coarse grained snapshots comparison 
+
+beta_list, state_list = [], []
+file_name = 'grid_RG/grid_RG_compare_cg.txt'
+with open(file_name, 'r') as f:
+    for line in f:
+        line = line.strip().split()
+        beta = '%.1f' % float(line[0])
+        state_list.append([beta, line[1:]])
+
+for state in state_list:
+    beta = state[0]
+    for s in state[1]:
+        size = int(round(len(s)**0.5))
+        PlotMatCG(s, size, beta)
+'''
+
+
+'''    PLOT CG VS NATIVE CURVES FOR M^2 VS beta    
+
+nat_m2_mean_list, cg_m2_mean_list = [], []
+beta_list = []
+test_m2_nat, test_m2_cg = [], []
+
+native_file = 'grid_RG/grid_RG.txt'
+cg_file     = 'grid_RG/grid_RG_cg.txt'
+test_file   = 'grid_RG/grid_RG_0.0_compare_cg_test.txt'
+
+with open(native_file,'r') as nat, open(cg_file,'r') as cg:
+    for natline in nat:
+        natline = natline.strip().split()
+        beta_list.append(float(natline[0]))
+        
+        nat_m2 = natline[1:]
+        nat_m2 = np.array(nat_m2, float)
+        nat_m2_mean,_,_,_ = stats.Stats(nat_m2)
+        nat_m2_mean_list.append(nat_m2_mean)
+    
+    for cgline in cg:
+        cgline = cgline.strip().split()
+        cg_m2 = cgline[1:]
+        cg_m2 = np.array(cg_m2, float)
+        cg_m2_mean,_,_,_ = stats.Stats(cg_m2)
+        cg_m2_mean_list.append(cg_m2_mean)
+        
+with open(test_file,'r') as test:
+    for line in test:
+        line = line.strip().split()
+        test_m2_nat.append(float(line[0]))
+        test_m2_cg.append(float(line[1]))
+
+test_m2_nat = np.array(test_m2_nat)
+test_m2_cg  = np.array(test_m2_cg)
+
+test_mean_m2_nat,_,_,_ = stats.Stats(test_m2_nat)
+test_mean_m2_cg,_,_,_ = stats.Stats(test_m2_cg)
+
+fig = plt.figure()
+plt.title(r'$\langle M^2 \rangle$ vs $\beta$')
+plt.xlabel(r'$\beta$')
+plt.ylabel(r'$\langle M^2 \rangle$')
+plt.plot(beta_list, nat_m2_mean_list, label=r'Native (nat)')
+plt.plot(beta_list, cg_m2_mean_list, label=r'Coarse grained (CG)')
+plt.plot(0.0, test_mean_m2_nat,'o', 
+         label=r'Test (nat) $\langle M^2 \rangle= %f$' % test_mean_m2_nat)
+plt.plot(0.0, test_mean_m2_cg,'o', 
+         label=r'Test (CG) $\langle M^2 \rangle= %f$' % test_mean_m2_cg)
+plt.legend()
+plt.savefig('M2_vs_beta_native_vs_CG.png', dpi=300)
+#plt.show()
+'''
+    
+
+'''    PLOTTING R(J) vs J    '''
 nat_m2_mean_list, cg_m2_mean_list = [], []
 beta_list = []
 
@@ -330,21 +439,54 @@ with open(native_file,'r') as nat, open(cg_file,'r') as cg:
         cg_m2 = np.array(cg_m2, float)
         cg_m2_mean,_,_,_ = stats.Stats(cg_m2)
         cg_m2_mean_list.append(cg_m2_mean)
-        
 
-print(nat_m2_mean_list)
-print(cg_m2_mean_list)
+arr = np.linspace(0.01,0.998,1000)
+
+nat_R_func   = interp1d(nat_m2_mean_list, beta_list, fill_value='extrapolate')
+
+nat_R_J     = list(nat_R_func(arr))
+R_J         = nat_R_func(cg_m2_mean_list)
+
 fig = plt.figure()
-plt.title(r'$\langle M^2 \rangle$ vs $\beta$')
-plt.xlabel(r'$\beta$')
-plt.ylabel(r'$\langle M^2 \rangle$')
-plt.plot(beta_list, nat_m2_mean_list, label=r'Native')
-plt.plot(beta_list, cg_m2_mean_list, label=r'Coarse grained')
+plt.title(r'$R(J)$ vs $J$')
+plt.xlabel(r'$J$')
+plt.ylabel(r'$R(J)$')
+plt.plot(beta_list, R_J, label=r'$R(J)$ vs $J$')
+x = np.linspace(0, 1.4, 1000)
+y = x
+plt.plot(x,y, '--', label=r'y=x')
+
+
+# Calculate critical point
+cg_R_func = interp1d(cg_m2_mean_list, beta_list)
+cg_R_J = list(cg_R_func(arr))
+crit_trans_T = 0
+temp = 1
+for nat, cg in zip(nat_R_J, cg_R_J):
+    if abs(nat-cg) < temp:
+        crit_trans_T = cg
+        temp = abs(nat-cg)
+
+plt.plot(crit_trans_T, crit_trans_T, 'o', 
+         label=r'Critical beta $\approx$ %.3f' % crit_trans_T)
+
+
+# Graphing arrows and calculate critical exponent
+R = interp1d(beta_list, R_J)#, fill_value='extrapolate')
+dR_dJ = UnivariateSpline(beta_list, R_J).derivative()
+
+#PlotArrows(0.35, R(0.35), R)
+#PlotArrows(0.5, R(0.5), R)
+
+crit_trans_T = beta_list[list(dR_dJ(beta_list)).index(max(dR_dJ(beta_list)))]
+print(crit_trans_T)
+crit_exp = log(dR_dJ(crit_trans_T),3.0)
+print(crit_exp)
+
 plt.legend()
-plt.show()
-    
-    
-    
+#plt.show()
+plt.savefig('img/RJ_vs_J_no_arrows.png', dpi=300)
+
 
 
 

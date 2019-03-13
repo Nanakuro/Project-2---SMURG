@@ -148,31 +148,35 @@ void writeCv(mt19937 &m, Ising &state, int sweep, string out_file_prefix, vector
     cout << "...done" << endl;
 }
 
-void writeCompareCG(mt19937 &m, Ising &state, int cg_scale, string out_file_prefix) {
-    string out_file_name = out_file_prefix + "_compare.txt";
+void writeTestCG(mt19937 &m, Ising &state, int cg_scale, string out_file_prefix) {
+    string out_file_name = "grid_RG/" + out_file_prefix + "_0.0_compare_cg_test.txt";
     ofstream outFile(out_file_name, fstream::trunc);
-    state.randomize(m);
-    state.setNewDefault();
-    
-    outFile << state.getBinary() << " " << state.getSize() << endl;
-    state.autoCG(cg_scale);
-    outFile << state.getBinary() << " " << state.getSize() << endl;
-    state.autoCG(cg_scale);
-    outFile << state.getBinary() << " " << state.getSize() << endl;
-    
+    //outFile << "Nat CG" << endl;
+    for (int swp=0; swp<num_sweeps; ++swp) {
+        state.randomize(m);
+        state.setNewDefault();
+        state.autoCG(cg_scale);
+        outFile << state.getM2() << " ";
+        state.randomize(m);
+        outFile << state.getM2() << endl;
+        state.reset();
+    }
     outFile.close();
 }
 
 void writeCG(mt19937 &m, Ising &state, int sweep, string out_file_prefix, int cg_scale, vector<double> beta_list) {
     uniform_real_distribution<double> real_dist(0,1);
     uniform_int_distribution<int> random_node(1,state.getNumSpins());
+//    string out_file_name = "grid_RG/" + out_file_prefix + "_cg.txt";
+//    ofstream outFile(out_file_name, fstream::trunc);
+    
     string beta_string = dtos(state.getBeta(), 1);
-    string out_file_name = "grid_RG/" + out_file_prefix + "_" + beta_string + "_cg.txt";
-    ofstream outFile(out_file_name, fstream::trunc);
+    string out_compare = "grid_RG/" + out_file_prefix + "_compare_cg.txt";
+    ofstream outCompare(out_compare, fstream::trunc);
     for (const auto &b : beta_list) {
         state.reset();
         state.setBeta(b);
-        outFile << state.getBeta() << " ";
+//        outFile << state.getBeta() << " ";
         for (int n_swp=0; n_swp<num_sweeps; ++n_swp) {
             for (int swp=0; swp<sweep; ++swp) {
                 int node_flip = random_node(m);
@@ -182,16 +186,24 @@ void writeCG(mt19937 &m, Ising &state, int sweep, string out_file_prefix, int cg
                     state.flipSpin(node_flip);
                 }
             }
-            if (n_swp+1 == num_sweeps) {
-                vector<int> temp = state.all_spins;
-                state.autoCG(cg_scale);
-                outFile << state.getBinary() << " " << state.getSize() << endl;
-                state.all_spins = temp;
-            }
+//            if (n_swp+1 >= start_time) {
+//                vector<int> temp = state.all_spins;
+//                state.autoCG(cg_scale);
+//                outFile << state.getM2() << " ";
+//                state.all_spins = temp;
+//            }
         }
-        outFile << endl;
+        if (beta_list.size() <= 10) {
+            outCompare << state.getBeta() << " " << state.getBinary() << " ";
+            state.autoCG(cg_scale);
+            outCompare << state.getBinary() << " ";
+            state.autoCG(cg_scale);
+            outCompare << state.getBinary() << endl;
+        }
+//        outFile << endl;
     }
-    outFile.close();
+//    outFile.close();
+    outCompare.close();
 //    cout << "...CG done" << endl;
 }
 
@@ -258,13 +270,13 @@ int main(int argc, char** argv) {
 //    writeCv(mt, myState, sweep, out_name, beta_list);
 
     // Write a random grid to compare coarse graining
-//    writeCompareCG(mt, myState, cg_size, out_name);
+    writeTestCG(mt, myStateCG, cg_size, out_name);
 
     // Write coarse grained:
-    //writeCG(mt, myState, sweep, out_name, cg_size, beta_list);
+//    writeCG(mt, myStateCG, sweep, out_name, cg_size, beta_list);
     
-    WriteGrid((int)round(grid_size/cg_size), spin_name, bond_name, true);//, not_file);
-    Ising myState(spin_name, bond_name, beta_list[0]);
+//    WriteGrid((int)round(grid_size/cg_size), spin_name, bond_name, true);//, not_file);
+//    Ising myState(spin_name, bond_name, beta_list[0]);
     
     //writeMCMC(mt, myState, sweep, out_name, beta_list);
     
